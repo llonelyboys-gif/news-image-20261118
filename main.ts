@@ -1,192 +1,200 @@
-// Sum up Wednesday 18 November 2026's world news in one image.
-// A deterministic program (Node 22, standard library only): it draws a
-// 1024x1024 newspaper-style infographic with its own bitmap font and PNG
-// encoder, and writes it to /output/entry.png. No network, no clock, no
-// randomness, so two runs write byte-identical files.
+// Wednesday 18 November 2026, summed up in a single picture.
+// This program (Node 22, standard library only) draws a 1024x1024
+// newspaper-style infographic and writes it to /output/entry.png.
+// It reads nothing, asks the clock nothing and rolls no dice, so
+// running it twice writes the very same bytes both times.
 //
-// Run it locally with:
+// Try it with:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { Canvas, rgb } from './src/png.ts';
-import { drawText, drawParagraph, textW, lineH } from './src/font.ts';
+import * as fs from 'node:fs';
+import { join as joinPath } from 'node:path';
+import { Sheet } from './src/png.ts';
+import type { Colour } from './src/png.ts';
+import { print, flow, measure, cellH } from './src/font.ts';
 
-const W = 1024;
-const H = 1024;
+// A printed front page: paper, ink, one accent colour per story.
+const PAPER: Colour = { r: 250, g: 246, b: 238 };
+const WHITE: Colour = { r: 255, g: 255, b: 255 };
+const INK: Colour = { r: 20, g: 30, b: 55 };
+const GRAY: Colour = { r: 88, g: 97, b: 112 };
+const LINE: Colour = { r: 214, g: 207, b: 192 };
+const RED: Colour = { r: 178, g: 34, b: 24 };
+const BLUE: Colour = { r: 30, g: 76, b: 214 };
+const TEAL: Colour = { r: 14, g: 116, b: 108 };
+const AMBER: Colour = { r: 178, g: 82, b: 8 };
+const GREEN: Colour = { r: 20, g: 126, b: 60 };
+const SEA: Colour = { r: 188, g: 217, b: 253 };
 
-// Palette: a printed front page — paper, ink, and one accent per story.
-const PAPER = rgb(247, 243, 235);
-const WHITE = rgb(255, 255, 255);
-const INK = rgb(22, 33, 58);
-const GRAY = rgb(91, 100, 114);
-const LINE = rgb(217, 210, 194);
-const RED = rgb(180, 35, 24);
-const BLUE = rgb(29, 78, 216);
-const TEAL = rgb(15, 118, 110);
-const AMBER = rgb(180, 83, 9);
-const GREEN = rgb(21, 128, 61);
-const SEA = rgb(191, 219, 254);
-const GOLD = rgb(196, 154, 43);
+type Card = {
+  accent: Colour;
+  num: string;
+  kicker: string;
+  headline: string;
+  summary: string;
+};
 
-const cv = new Canvas(W, H, PAPER);
+const HERO = {
+  kicker: 'THE SUMMIT - SHENZHEN, CHINA',
+  lines: ['XI AND PUTIN', 'MEET BEFORE', 'THE SUMMIT'],
+  dek: 'THE CHINESE AND RUSSIAN LEADERS OPEN APEC TALKS IN SHENZHEN. THEIR FIRST THREE-WAY SUMMIT WITH TRUMP IS SET FOR THURSDAY.',
+};
+
+const CARDS: Card[] = [
+  {
+    accent: BLUE,
+    num: '1',
+    kicker: 'DIPLOMACY - MANILA',
+    headline: 'QUAD MEETS IN MANILA',
+    summary:
+      'FIRST LEADER-LEVEL MEETING IN OVER TWO YEARS. TRUMP ANNOUNCES A TRADE DEAL WITH THE PHILIPPINES.',
+  },
+  {
+    accent: AMBER,
+    num: '2',
+    kicker: 'THE GULF',
+    headline: 'STRIKES ACROSS THE GULF',
+    summary:
+      'US JETS HIT A MISSILE SITE ON QESHM ISLAND. IRAN ANSWERS WITH DRONE STRIKES ON GULF BASES.',
+  },
+  {
+    accent: RED,
+    num: '3',
+    kicker: 'WAR - UKRAINE',
+    headline: 'KERCH BRIDGE HIT AGAIN',
+    summary: 'UKRAINE STRIKES THE BRIDGE FOR A SECOND DAY. PART OF THE ROAD SPAN COLLAPSES.',
+  },
+  {
+    accent: TEAL,
+    num: '4',
+    kicker: 'US POLITICS',
+    headline: 'PELTOLA FLIPS ALASKA',
+    summary: 'THE DEMOCRAT WINS THE SENATE SEAT, GIVING HER PARTY A 56-44 MAJORITY.',
+  },
+];
+
+const CARD_AT = [
+  { x: 28, y: 498 },
+  { x: 516, y: 498 },
+  { x: 28, y: 686 },
+  { x: 516, y: 686 },
+];
+
+const STRIP = [
+  {
+    label: 'MONEY',
+    labelColour: GREEN,
+    title: 'NVIDIA POSTS RECORD $115.8B QUARTER',
+    sub: "THE CHIPMAKER'S BOARD REJECTS BRINGING BACK ITS FORMER CHIEF.",
+  },
+  {
+    label: 'SPORT',
+    labelColour: AMBER,
+    title: 'DHONI RETIRES FROM THE IPL',
+    sub: 'THE CRICKET GREAT ENDS HIS INDIAN PREMIER LEAGUE CAREER.',
+  },
+];
+
+const sheet = new Sheet(1024, 1024, PAPER);
 
 // ---- Masthead ------------------------------------------------------------
-cv.rect(32, 30, 960, 6, RED);
-drawText(cv, 'THE WORLD IN ONE PICTURE', 32, 46, 5, INK);
-drawText(cv, 'WEDNESDAY, 18 NOVEMBER 2026', 32, 94, 3, RED);
-cv.rect(32, 126, 960, 2, INK);
+sheet.box(28, 28, 968, 6, RED);
+print(sheet, 'THE WORLD IN ONE PICTURE', 28, 44, 9, INK);
+print(sheet, 'WEDNESDAY, 18 NOVEMBER 2026', 28, 96, 4, RED);
+sheet.box(28, 128, 968, 2, INK);
 
-// ---- Hero: Xi and Putin meet in Shenzhen -----------------------------------
-const HERO_X = 32;
-const HERO_Y = 142;
-const HERO_W = 960;
-const HERO_H = 310;
-cv.rect(HERO_X, HERO_Y, HERO_W, HERO_H, WHITE);
-cv.rect(HERO_X, HERO_Y, HERO_W, 10, RED);
-cv.frame2(HERO_X, HERO_Y, HERO_W, HERO_H, INK);
+// ---- Hero: the Shenzhen summit -------------------------------------------
+sheet.box(28, 144, 968, 304, WHITE);
+sheet.box(28, 144, 968, 10, RED);
+sheet.border(28, 144, 968, 304, INK, 2);
+print(sheet, HERO.kicker, 52, 174, 3, RED);
+for (let i = 0; i < HERO.lines.length; i++) print(sheet, HERO.lines[i], 52, 206 + i * 48, 8, INK);
+flow(sheet, HERO.dek, 52, 352, 560, 3, GRAY);
 
-drawText(cv, 'THE SUMMIT - SHENZHEN, CHINA', 56, 172, 2, RED);
-drawText(cv, 'XI AND PUTIN', 56, 202, 5, INK);
-drawText(cv, 'MEET BEFORE', 56, 243, 5, INK);
-drawText(cv, 'THE SUMMIT', 56, 284, 5, INK);
-drawParagraph(
-  cv,
-  'THE CHINESE AND RUSSIAN LEADERS OPEN APEC TALKS IN SHENZHEN. THEIR FIRST THREE-WAY SUMMIT WITH TRUMP IS SET FOR THURSDAY.',
-  56,
-  334,
-  560,
-  2,
-  GRAY,
-);
-
-// Hero art: a globe with a marker on Shenzhen, over a city skyline.
-const GX = 815;
-const GY = 285;
-const GR = 80;
-cv.disc(GX, GY, GR, SEA);
-// Land masses, all fully inside the globe.
-cv.disc(790, 258, 22, TEAL);
-cv.disc(840, 302, 18, TEAL);
-cv.disc(798, 322, 14, TEAL);
-cv.disc(838, 252, 10, TEAL);
+// Hero art: a globe with a marker on Shenzhen, above a city skyline.
+const GX = 820;
+const GY = 290;
+const GR = 78;
+sheet.fillCircle(GX, GY, GR, SEA);
+// Land, all kept inside the globe.
+sheet.fillCircle(795, 263, 21, TEAL);
+sheet.fillCircle(843, 305, 17, TEAL);
+sheet.fillCircle(802, 325, 13, TEAL);
+sheet.fillCircle(842, 255, 9, TEAL);
 // Latitude and longitude lines, clipped to the circle.
-for (const dy of [-40, 0, 40]) {
+for (const dy of [-38, 0, 38]) {
   const half = Math.floor(Math.sqrt(GR * GR - dy * dy));
-  cv.line(GX - half, GY + dy, GX + half, GY + dy, INK);
+  sheet.seg(GX - half, GY + dy, GX + half, GY + dy, INK);
 }
-for (const dx of [-40, 0, 40]) {
+for (const dx of [-38, 0, 38]) {
   const half = Math.floor(Math.sqrt(GR * GR - dx * dx));
-  cv.line(GX + dx, GY - half, GX + dx, GY + half, INK);
+  sheet.seg(GX + dx, GY - half, GX + dx, GY + half, INK);
 }
-cv.ring(GX, GY, GR, INK);
+sheet.circle(GX, GY, GR, INK);
 // Shenzhen marker.
-cv.disc(856, 262, 7, RED);
-cv.ring(856, 262, 7, WHITE);
-drawText(cv, 'SHENZHEN', 769, 380, 2, RED);
+sheet.fillCircle(858, 265, 6, RED);
+sheet.circle(858, 265, 6, WHITE);
+print(sheet, 'SHENZHEN', 776, 384, 3, RED);
 
 // Skyline strip along the bottom of the hero panel.
-for (let x = 56; x < 960; x += 34) {
-  const h = 12 + ((x * 7) % 17);
-  cv.rect(x, 444 - h, 26, h, INK);
-  if (x % 3 === 0) {
-    cv.rect(x + 5, 444 - h + 4, 4, 5, PAPER);
-    cv.rect(x + 15, 444 - h + 4, 4, 5, PAPER);
+let n = 0;
+for (let x = 52; x < 968; x += 36) {
+  const h = 10 + ((x * 11) % 19);
+  sheet.box(x, 440 - h, 26, h, INK);
+  if (n % 2 === 0) {
+    sheet.box(x + 5, 440 - h + 4, 4, 5, PAPER);
+    sheet.box(x + 15, 440 - h + 4, 4, 5, PAPER);
   }
+  n++;
 }
 
 // ---- Section label ---------------------------------------------------------
-cv.rect(32, 470, 14, 14, RED);
-drawText(cv, 'MORE OF THE DAY', 54, 468, 3, INK);
+sheet.box(28, 466, 14, 14, RED);
+print(sheet, 'MORE OF THE DAY', 50, 464, 4, INK);
 
 // ---- Story cards -----------------------------------------------------------
-function card(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  accent: { r: number; g: number; b: number },
-  num: string,
-  kicker: string,
-  headline: string,
-  summary: string,
-): void {
-  cv.rect(x, y, w, h, WHITE);
-  cv.rect(x, y, w, 8, accent);
-  cv.frame2(x, y, w, h, INK);
+function drawCard(sheet: Sheet, at: { x: number; y: number }, card: Card): void {
+  const { x, y } = at;
+  sheet.box(x, y, 472, 168, WHITE);
+  sheet.box(x, y, 472, 8, card.accent);
+  sheet.border(x, y, 472, 168, INK, 2);
   // Number chip.
-  cv.disc(x + 30, y + 36, 17, accent);
-  drawText(cv, num, x + 30 - Math.floor(textW(num, 3) / 2), y + 36 - Math.floor(lineH(3) / 2), 3, WHITE);
-  drawText(cv, kicker, x + 56, y + 28, 2, accent);
-  const afterHeadline = drawParagraph(cv, headline, x + 20, y + 60, w - 40, 3, INK);
-  drawParagraph(cv, summary, x + 20, afterHeadline + 8, w - 40, 2, GRAY);
+  sheet.fillCircle(x + 30, y + 36, 17, card.accent);
+  print(
+    sheet,
+    card.num,
+    x + 30 - Math.floor(measure(card.num, 4) / 2),
+    y + 36 - Math.floor(cellH(4) / 2),
+    4,
+    WHITE,
+  );
+  print(sheet, card.kicker, x + 56, y + 28, 3, card.accent);
+  const below = flow(sheet, card.headline, x + 20, y + 60, 432, 4, INK);
+  flow(sheet, card.summary, x + 20, below + 8, 432, 3, GRAY);
 }
 
-card(
-  32,
-  502,
-  468,
-  168,
-  BLUE,
-  '1',
-  'DIPLOMACY - MANILA',
-  'QUAD MEETS IN MANILA',
-  'FIRST LEADER-LEVEL MEETING IN OVER TWO YEARS. TRUMP ANNOUNCES A TRADE DEAL WITH THE PHILIPPINES.',
-);
-card(
-  524,
-  502,
-  468,
-  168,
-  AMBER,
-  '2',
-  'THE GULF',
-  'STRIKES ACROSS THE GULF',
-  'US JETS HIT A MISSILE SITE ON QESHM ISLAND. IRAN ANSWERS WITH DRONE STRIKES ON GULF BASES.',
-);
-card(
-  32,
-  690,
-  468,
-  168,
-  RED,
-  '3',
-  'WAR - UKRAINE',
-  'KERCH BRIDGE HIT AGAIN',
-  'UKRAINE STRIKES THE BRIDGE FOR A SECOND DAY. PART OF THE ROAD SPAN COLLAPSES.',
-);
-card(
-  524,
-  690,
-  468,
-  168,
-  TEAL,
-  '4',
-  'US POLITICS',
-  'PELTOLA FLIPS ALASKA',
-  'THE DEMOCRAT WINS THE SENATE SEAT, GIVING HER PARTY A 56-44 MAJORITY.',
-);
+for (let i = 0; i < CARDS.length; i++) drawCard(sheet, CARD_AT[i], CARDS[i]);
 
-// ---- Bottom strip: money and sport -----------------------------------------
-const STRIP_Y = 878;
-cv.rect(32, STRIP_Y, 960, 96, WHITE);
-cv.frame2(32, STRIP_Y, 960, 96, INK);
-cv.line(512, STRIP_Y + 12, 512, STRIP_Y + 84, LINE);
+// ---- Bottom strip: money and sport ---------------------------------------
+sheet.box(28, 874, 968, 96, WHITE);
+sheet.border(28, 874, 968, 96, INK, 2);
+sheet.seg(512, 886, 512, 958, LINE);
 
-drawText(cv, 'MONEY', 52, STRIP_Y + 12, 2, GREEN);
-drawText(cv, 'NVIDIA POSTS RECORD $115.8B QUARTER', 52, STRIP_Y + 34, 2, INK);
-drawParagraph(cv, "THE CHIPMAKER'S BOARD REJECTS BRINGING BACK ITS FORMER CHIEF.", 52, STRIP_Y + 56, 440, 2, GRAY);
-
-drawText(cv, 'SPORT', 544, STRIP_Y + 12, 2, AMBER);
-drawText(cv, 'DHONI RETIRES FROM THE IPL', 544, STRIP_Y + 34, 2, INK);
-drawParagraph(cv, 'THE CRICKET GREAT ENDS HIS INDIAN PREMIER LEAGUE CAREER.', 544, STRIP_Y + 56, 428, 2, GRAY);
+const STRIP_X = [48, 540];
+for (let i = 0; i < STRIP.length; i++) {
+  const item = STRIP[i];
+  const sx = STRIP_X[i];
+  print(sheet, item.label, sx, 886, 3, item.labelColour);
+  print(sheet, item.title, sx, 908, 3, INK);
+  flow(sheet, item.sub, sx, 928, 440, 3, GRAY);
+}
 
 // ---- Footer ------------------------------------------------------------------
-cv.rect(32, 988, 960, 2, INK);
+sheet.box(28, 984, 968, 2, INK);
 const footer = 'SIX STORIES THAT DEFINED THE DAY';
-drawText(cv, footer, Math.floor((W - textW(footer, 2)) / 2), 1000, 2, INK);
+print(sheet, footer, Math.floor((1024 - measure(footer, 3)) / 2), 996, 3, INK);
 
 // ---- Write -------------------------------------------------------------------
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-mkdirSync(out, { recursive: true });
-writeFileSync(join(out, 'entry.png'), cv.toPNG());
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(joinPath(outDir, 'entry.png'), sheet.encode());
